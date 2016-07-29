@@ -197,3 +197,29 @@ class ChiSqSelector @Since("1.3.0") (
     new ChiSqSelectorModel(indices)
   }
 }
+/**
+ * Creates a ChiSquared feature selector by Percentile.
+ * @param percentile     percentage of features that selector will select
+ *                       (ordered by statistic value descending)
+ */
+@Since("1.3.0")
+class PercentileChiSqSelector @Since("1.3.0") (
+  @Since("1.3.0") val percentile: Int) extends Serializable {
+
+  /**
+   * Returns a ChiSquared feature selector.
+   *
+   * @param data an `RDD[LabeledPoint]` containing the labeled dataset with categorical features.
+   *             Real-valued features will be treated as categorical for each distinct value.
+   *             Apply feature discretizer before using this function.
+   */
+  @Since("1.3.0")
+  def fit(data: RDD[LabeledPoint]): ChiSqSelectorModel = {
+    val indices = Statistics.chiSqTest(data)
+      .zipWithIndex.sortBy { case (res, _) => -res.statistic }
+      .take((data.count()*percentile/100).toInt)
+      .map { case (_, indices) => indices }
+      .sorted
+    new ChiSqSelectorModel(indices)
+  }
+}
