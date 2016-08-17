@@ -87,19 +87,21 @@ final class ChiSqSelector @Since("1.6.0") (@Since("1.6.0") override val uid: Str
   def this() = this(Identifiable.randomUID("chiSqSelector"))
   val chiSqSelector = new feature.ChiSqSelector()
   /** @group setParam */
-  @Since("1.6.0")
+  @Since("2.1.0")
   def setNumTopFeatures(value: Int): this.type = {
     chiSqSelector.setNumTopFeatures(value)
     chiSqSelector.setChiSqSelectorType(ChiSqSelectorType.KBest)
     set(numTopFeatures, value)
   }
 
+  @Since("2.1.0")
   def setPercentile(value: Int): this.type = {
     chiSqSelector.setPercentile(value)
     chiSqSelector.setChiSqSelectorType(ChiSqSelectorType.Percentile)
     set(percentile, value)
   }
 
+  @Since("2.1.0")
   def setAlpha(value: Double): this.type = {
     chiSqSelector.setAlpha(value)
     chiSqSelector.setChiSqSelectorType(ChiSqSelectorType.Fpr)
@@ -130,16 +132,19 @@ final class ChiSqSelector @Since("1.6.0") (@Since("1.6.0") override val uid: Str
     copyValues(new ChiSqSelectorModel(uid, model).setParent(this))
   }
 
+  @Since("2.1.0")
   def selectKBest(value: Int): ChiSqSelectorModel = {
     val model = chiSqSelector.selectKBest(value)
     copyValues(new ChiSqSelectorModel(uid, model).setParent(this))
   }
 
+  @Since("2.1.0")
   def selectPercentile(value: Int): ChiSqSelectorModel = {
     val model = chiSqSelector.selectPercentile(value)
     copyValues(new ChiSqSelectorModel(uid, model).setParent(this))
   }
 
+  @Since("2.1.0")
   def selectFpr(value: Double): ChiSqSelectorModel = {
     val model = chiSqSelector.selectFpr(value)
     copyValues(new ChiSqSelectorModel(uid, model).setParent(this))
