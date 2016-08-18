@@ -79,7 +79,6 @@ private[feature] trait ChiSqSelectorParams extends Params
   def getChiSqSelectorType: String = $(selectorType)
 }
 
-
 /**
  * Chi-Squared feature selection, which selects categorical features to use for predicting a
  * categorical label.
@@ -90,7 +89,10 @@ final class ChiSqSelector @Since("1.6.0") (@Since("1.6.0") override val uid: Str
 
   @Since("1.6.0")
   def this() = this(Identifiable.randomUID("chiSqSelector"))
+
+  @Since("2.1.0")
   var chiSqSelector: feature.ChiSqSelector = null
+
   /** @group setParam */
   @Since("2.1.0")
   def setNumTopFeatures(value: Int): this.type = {

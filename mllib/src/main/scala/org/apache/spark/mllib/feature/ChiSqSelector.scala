@@ -181,7 +181,7 @@ object ChiSqSelectorModel extends Loader[ChiSqSelectorModel] {
 @Since("2.1.0")
 class ChiSqSelector @Since("2.1.0") () extends Serializable {
   private var numTopFeatures: Int = 50
-  private var percentile: Double = 10
+  private var percentile: Double = 10.0
   private var alpha: Double = 0.05
   private var selectorType = ChiSqSelectorType.KBest
   private var chiSqTestResult: Array[ChiSqTestResult] = _
@@ -260,4 +260,3 @@ class ChiSqSelector @Since("2.1.0") () extends Serializable {
     new ChiSqSelectorModel(indices)
   }
 }
-
