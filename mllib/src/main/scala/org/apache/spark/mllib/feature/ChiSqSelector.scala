@@ -181,7 +181,7 @@ object ChiSqSelectorModel extends Loader[ChiSqSelectorModel] {
 @Since("2.1.0")
 class ChiSqSelector @Since("2.1.0") () extends Serializable {
   private var numTopFeatures: Int = 50
-  private var percentile: Int = 10
+  private var percentile: Double = 10
   private var alpha: Double = 0.05
   private var selectorType = ChiSqSelectorType.KBest
   private var chiSqTestResult: Array[ChiSqTestResult] = _
@@ -200,7 +200,7 @@ class ChiSqSelector @Since("2.1.0") () extends Serializable {
   }
 
   @Since("2.1.0")
-  def setPercentile(value: Int): this.type = {
+  def setPercentile(value: Double): this.type = {
     percentile = value
     selectorType = ChiSqSelectorType.Percentile
     this
@@ -246,7 +246,7 @@ class ChiSqSelector @Since("2.1.0") () extends Serializable {
   }
 
   @Since("2.1.0")
-  def selectPercentile(value: Int): ChiSqSelectorModel = {
+  def selectPercentile(value: Double): ChiSqSelectorModel = {
     val indices = chiSqTestResult.zipWithIndex.sortBy { case (res, _) => -res.statistic }
     .take((chiSqTestResult.length * percentile / 100).toInt)
     .map { case (_, indices) => indices }
