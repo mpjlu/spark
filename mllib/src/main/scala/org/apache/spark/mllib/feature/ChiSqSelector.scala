@@ -191,28 +191,28 @@ class ChiSqSelector @Since("2.1.0") () extends Serializable {
     this()
     this.numTopFeatures = numTopFeatures
   }
-  
+
   @Since("2.1.0")
   def setNumTopFeatures(value: Int): this.type = {
     numTopFeatures = value
     selectorType = ChiSqSelectorType.KBest
     this
   }
-  
+
   @Since("2.1.0")
   def setPercentile(value: Int): this.type = {
     percentile = value
     selectorType = ChiSqSelectorType.Percentile
     this
   }
-  
+
   @Since("2.1.0")
   def setAlpha(value: Double): this.type = {
     alpha = value
     selectorType = ChiSqSelectorType.Fpr
     this
   }
-  
+
   @Since("2.1.0")
   def setChiSqSelectorType(value: ChiSqSelectorType.Value): this.type = {
     selectorType = value
