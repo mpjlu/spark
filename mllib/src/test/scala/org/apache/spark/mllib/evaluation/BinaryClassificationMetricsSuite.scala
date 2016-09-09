@@ -130,7 +130,7 @@ class BinaryClassificationMetricsSuite extends SparkFunSuite with MLlibTestSpark
       (0.6, 1.0), (0.7, 1.0), (0.8, 0.0), (0.9, 1.0))
 
     val scoreAndLabelsRDD = sc.parallelize(scoreAndLabels, 1)
-
+    print(scoreAndLabels.size)
     val original = new BinaryClassificationMetrics(scoreAndLabelsRDD)
     val originalROC = original.roc().collect().sorted.toList
     // Add 2 for (0,0) and (1,1) appended at either end
@@ -144,8 +144,11 @@ class BinaryClassificationMetricsSuite extends SparkFunSuite with MLlibTestSpark
       originalROC)
 
     val numBins = 4
-
-    val downsampled = new BinaryClassificationMetrics(scoreAndLabelsRDD, numBins)
+    print("asdfasf")
+    print(scoreAndLabels.size)
+    original.unpersist()
+    // val downsampled = original.setBins(numBins)
+    val downsampled = new BinaryClassificationMetrics(scoreAndLabelsRDD).setBins(numBins)
     val downsampledROC = downsampled.roc().collect().sorted.toList
     assert(
       // May have to add 1 if the sample factor didn't divide evenly
