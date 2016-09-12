@@ -47,6 +47,9 @@ class BinaryClassificationMetrics @Since("1.3.0") (
 
   require(numBins >= 0, "numBins must be nonnegative")
 
+  private var cumulativeCountsRDD: RDD[(Double, BinaryLabelCounter)] = _
+  private var confusionsRDD: RDD[(Double, BinaryConfusionMatrix)] = _
+
   /**
    * Defaults `numBins` to 0.
    */
@@ -67,8 +70,36 @@ class BinaryClassificationMetrics @Since("1.3.0") (
   @Since("2.1.0")
   def setBins(numBins: Int): this.type = {
     require(numBins >= 0, "numBins must be nonnegative")
-    this.numBins = numBins
+    if (this.numBins != numBins) {
+      this.numBins = numBins
+      cumulativeCountsRDD = null
+      confusionsRDD = null
+    }
     this
+  }
+
+  /**
+    * Return cumulativeCountsRDD.
+    * If cumulativeCountsRDD is null, initialize it first.
+    */
+  @Since("2.1.0")
+  private[mllib] def cumulativeCounts: RDD[(Double, BinaryLabelCounter)] = {
+    if (cumulativeCountsRDD == null) {
+      initialize()
+    }
+    cumulativeCountsRDD
+  }
+
+  /**
+    * Return confusionsRDD.
+    * If confusionsRDD is null, initialize it first.
+    */
+  @Since("2.1.0")
+  private[mllib] def confusions: RDD[(Double, BinaryConfusionMatrix)] = {
+    if (confusionsRDD == null) {
+      initialize()
+    }
+    confusionsRDD
   }
 
   /**
@@ -94,7 +125,6 @@ class BinaryClassificationMetrics @Since("1.3.0") (
   @Since("1.0.0")
   def roc(): RDD[(Double, Double)] = {
     val rocCurve = createCurve(FalsePositiveRate, Recall)
-    print(rocCurve.toString)
     val sc = confusions.context
     val first = sc.makeRDD(Seq((0.0, 0.0)), 1)
     val last = sc.makeRDD(Seq((1.0, 1.0)), 1)
@@ -153,9 +183,11 @@ class BinaryClassificationMetrics @Since("1.3.0") (
   @Since("1.0.0")
   def recallByThreshold(): RDD[(Double, Double)] = createCurve(Recall)
 
-  private lazy val (
-    cumulativeCounts: RDD[(Double, BinaryLabelCounter)],
-    confusions: RDD[(Double, BinaryConfusionMatrix)]) = {
+  /**
+    * initialize confusionsRDD and cumulativeCountsRDD
+    */
+  @Since("2.1.0")
+  private[mllib] def initialize () {
     // Create a bin for each distinct score value, count positives and negatives within each bin,
     // and then sort by score values in descending order.
     val counts = scoreAndLabels.combineByKey(
@@ -164,8 +196,8 @@ class BinaryClassificationMetrics @Since("1.3.0") (
       mergeCombiners = (c1: BinaryLabelCounter, c2: BinaryLabelCounter) => c1 += c2
     ).sortByKey(ascending = false)
 
-    val binnedCounts =
-      // Only down-sample if bins is > 0
+    val binnedCounts: RDD[(Double, BinaryLabelCounter)] =
+    // Only down-sample if bins is > 0
       if (numBins == 0) {
         // Use original directly
         counts
@@ -204,7 +236,7 @@ class BinaryClassificationMetrics @Since("1.3.0") (
       agg.scanLeft(new BinaryLabelCounter())((agg, c) => agg.clone() += c)
     val totalCount = partitionwiseCumulativeCounts.last
     logInfo(s"Total counts: $totalCount")
-    val cumulativeCounts = binnedCounts.mapPartitionsWithIndex(
+    cumulativeCountsRDD = binnedCounts.mapPartitionsWithIndex(
       (index: Int, iter: Iterator[(Double, BinaryLabelCounter)]) => {
         val cumCount = partitionwiseCumulativeCounts(index)
         iter.map { case (score, c) =>
@@ -212,11 +244,10 @@ class BinaryClassificationMetrics @Since("1.3.0") (
           (score, cumCount.clone())
         }
       }, preservesPartitioning = true)
-    cumulativeCounts.persist()
-    val confusions = cumulativeCounts.map { case (score, cumCount) =>
+    cumulativeCountsRDD.persist()
+    confusionsRDD = cumulativeCountsRDD.map { case (score, cumCount) =>
       (score, BinaryConfusionMatrixImpl(cumCount, totalCount).asInstanceOf[BinaryConfusionMatrix])
     }
-    (cumulativeCounts, confusions)
   }
 
   /** Creates a curve of (threshold, metric). */
