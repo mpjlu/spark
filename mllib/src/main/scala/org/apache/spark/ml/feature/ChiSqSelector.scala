@@ -89,7 +89,7 @@ private[feature] trait ChiSqSelectorParams extends Params
   def getAlphaFWE: Double = $(alphaFWE)
 
   /**
-   * The ChiSqSelector supports `KBest`, `Percentile`, `FPR`,`FDR`,`FWE` selection,
+   * The ChiSqSelector supports `KBest`, `Percentile`, `FPR`, `FDR`, `FWE` selection,
    * which is the same as ChiSqSelectorType defined in MLLIB.
    * when call setNumTopFeatures, the selectorType is set to KBest
    * when call setPercentile, the selectorType is set to Percentile
