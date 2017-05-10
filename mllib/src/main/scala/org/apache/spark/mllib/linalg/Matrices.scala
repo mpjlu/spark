@@ -30,6 +30,7 @@ import org.apache.spark.ml.{linalg => newlinalg}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{GenericInternalRow, UnsafeArrayData}
 import org.apache.spark.sql.types._
+import org.apache.spark.util.BoundedPriorityQueue
 
 /**
  * Trait for a local matrix.
@@ -354,6 +355,28 @@ class DenseMatrix @Since("1.3.0") (
       i += 1
     }
     this
+  }
+
+  def getTopK(topK: Int): DenseMatrix = {
+    val value = new Array[Double](numRows * topK)
+    val pq = new BoundedPriorityQueue[Double](topK)
+    var j = 0
+    while(j < numRows) {
+      var i = 0
+      while(i < numCols) {
+        pq += this(i, j)
+        i += 1
+      }
+      var k = 0
+      val qIt = pq.iterator
+      while (k < topK) {
+        value(topK * j + k) = qIt.next()
+        k += 1
+      }
+      j += 1
+    }
+
+    new DenseMatrix(numRows, topK, value)
   }
 
   @Since("1.3.0")

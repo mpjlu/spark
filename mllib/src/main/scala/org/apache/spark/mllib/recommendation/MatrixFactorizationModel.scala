@@ -281,13 +281,18 @@ object MatrixFactorizationModel extends Loader[MatrixFactorizationModel] {
         val m = srcIds.length
         val n = dstIds.length
         val ratings = srcFactors.transpose.multiply(dstFactors)
-        val output = new Array[(Int, (Int, Double))](m * n)
-        var k = 0
-        ratings.foreachActive { (i, j, r) =>
-          output(k) = (srcIds(i), (dstIds(j), r))
-          k += 1
+        // val output = new Array[(Int, (Int, Double))](m * n)
+        // var k = 0
+       // ratings.foreachActive { (i, j, r) =>
+         // output(k) = (srcIds(i), (dstIds(j), r))
+        //  k += 1
+        val topKRatings = ratings.getTopK(num)
+        Iterator.range(0, m).flatMap { i =>
+          Iterator.range(0, num).map{ j =>
+            (srcIds(i), (dstIds(j), topKRatings(i, j)))
+          }
         }
-        output.toSeq
+       // output.toSeq
     }
     ratings.topByKey(num)(Ordering.by(_._2))
   }
