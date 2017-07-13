@@ -20,6 +20,8 @@ package org.apache.spark.mllib.recommendation
 import java.io.IOException
 import java.lang.{Integer => JavaInteger}
 
+import scala.collection.mutable
+
 import com.clearspring.analytics.stream.cardinality.HyperLogLogPlus
 import com.github.fommil.netlib.BLAS.{getInstance => blas}
 import org.apache.hadoop.fs.Path
@@ -31,7 +33,7 @@ import org.apache.spark.SparkContext
 import org.apache.spark.annotation.Since
 import org.apache.spark.api.java.{JavaPairRDD, JavaRDD}
 import org.apache.spark.internal.Logging
-import org.apache.spark.mllib.linalg.BLAS
+import org.apache.spark.mllib.linalg._
 import org.apache.spark.mllib.rdd.MLPairRDDFunctions._
 import org.apache.spark.mllib.util.{Loader, Saveable}
 import org.apache.spark.rdd.RDD
@@ -311,6 +313,98 @@ object MatrixFactorizationModel extends Loader[MatrixFactorizationModel] {
     ratings.topByKey(num)(Ordering.by(_._2))
   }
 
+  private def recommendForAll2(
+                               rank: Int,
+                               srcFeatures: RDD[(Int, Array[Double])],
+                               dstFeatures: RDD[(Int, Array[Double])],
+                               num: Int) = {
+    val srcBlocks = blockify2(rank, srcFeatures).zipWithIndex()
+    val dstBlocks = blockify2(rank, dstFeatures)
+
+    val ratings = srcBlocks.cartesian(dstBlocks).map {
+      case (((srcIds, srcFactors), index), (dstIds, dstFactors)) =>
+        val m = srcIds.length
+        val pq = new BoundedPriorityQueue[(Int, Double)](num)(Ordering.by(_._2))
+        val dstIdMatrix = new Array[Int](m * num)
+        val scoreMatrix = Array.fill[Double](m * num)(Double.MinValue)
+        val ratings = srcFactors.transpose.multiply(dstFactors)
+        var i = 0
+        var j = 0
+        while (i < ratings.numRows) {
+          var k = 0
+          while (k < ratings.numCols) {
+            pq += dstIds(k) -> ratings(i, k)
+            k += 1
+          }
+          pq.foreach { case (dstId, score) =>
+            dstIdMatrix(j) = dstId
+            scoreMatrix(j) = score
+            j += 1
+          }
+          i += 1
+          pq.clear
+        }
+        (index -> (srcIds, dstIdMatrix, new DenseMatrix(m, num, scoreMatrix)))
+    }
+    ratings.aggregateByKey(null: Array[Int], null: Array[Int], null: DenseMatrix)(
+      (rateSum, rate) => {
+        mergeFunc(rateSum, rate, num)
+      },
+      (rateSum1, rateSum2) => {
+        mergeFunc(rateSum1, rateSum2, num)
+      }
+    ).flatMap(value => {
+      // to avoid corner case that the number of items is less than recommendation num
+      var col: Int = 0
+      while (value._2._3(0, col) > Double.MinValue && col < num) {
+        col += 1
+      }
+      val row = value._2._3.numRows
+      val output = new Array[(Int, (Int, Double))](row * col)
+      var i = 0
+      var j = 0
+      while (i < row) {
+        while (j < col) {
+          output(i) = value._2._1(i) -> (value._2._2(i * num + j), value._2._3(i, j))
+          j += 1
+        }
+        i += 1
+      }
+      output.toSeq})
+  }
+
+  private def mergeFunc(rateSum: (Array[Int], Array[Int], DenseMatrix),
+                        rate: (Array[Int], Array[Int], DenseMatrix),
+                        num: Int): (Array[Int], Array[Int], DenseMatrix) = {
+    if (rateSum._1 == null) {
+      rate
+    } else {
+      val row = rateSum._3.numRows
+      var i = 0
+      var j = 0
+      val tempIdMatrix = new Array[Int](row * num)
+      val tempScoreMatrix = new Array[Double](row * num)
+      while (i < row) {
+        while (j < num) {
+          var sum_index = 0
+          var rate_index = 0
+          if (rate._3(i, rate_index) > rateSum._3(i, sum_index)) {
+            tempIdMatrix(i * num + j) = rate._2(i * num + rate_index)
+            tempScoreMatrix(i * num + j) = rate._3(i * num + rate_index)
+            rate_index += 1
+          } else {
+            tempIdMatrix(i * num + j) = rate._2(i * num + sum_index)
+            tempScoreMatrix(i * num + j) = rate._3(i * num + sum_index)
+            sum_index += 1
+          }
+          j += 1
+        }
+        i += 1
+      }
+      (rateSum._1, tempIdMatrix, new DenseMatrix(row, num, tempScoreMatrix))
+    }
+  }
+
   /**
    * Blockifies features to improve the efficiency of cartesian product
    * TODO: SPARK-20443 - expose blockSize as a param?
@@ -322,6 +416,31 @@ object MatrixFactorizationModel extends Loader[MatrixFactorizationModel] {
       iter.grouped(blockSize)
     }
   }
+
+
+  private def blockify2(
+                        rank: Int,
+                        features: RDD[(Int, Array[Double])]): RDD[(Array[Int], DenseMatrix)] = {
+    val blockSize = 4096 // TODO: tune the block size
+    val blockStorage = rank * blockSize
+    features.mapPartitions { iter =>
+      iter.grouped(blockSize).map { grouped =>
+        val ids = mutable.ArrayBuilder.make[Int]
+        ids.sizeHint(blockSize)
+        val factors = mutable.ArrayBuilder.make[Double]
+        factors.sizeHint(blockStorage)
+        var i = 0
+        grouped.foreach { case (id, factor) =>
+          ids += id
+          factors ++= factor
+          i += 1
+        }
+        (ids.result(), new DenseMatrix(rank, i, factors.result()))
+      }
+    }
+  }
+
+
 
   /**
    * Load a model from the given path.
