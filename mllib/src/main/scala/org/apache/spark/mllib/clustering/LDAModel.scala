@@ -607,9 +607,17 @@ class DistributedLDAModel private[clustering] (
         q1.zip(q2).foreach { case (a, b) => a ++= b}
         q1
       }
-    topicsInQueues.map { q =>
-      val (termWeights, terms) = q.toArray.sortBy(-_._1).unzip
-      (terms.toArray, termWeights.toArray)
+      topicsInQueues.map { q =>
+      var size = q.size
+      val termWeights = new Array[Double](size)
+      val terms = new Array[Int](size)
+      while (size > 0) {
+        size -= 1
+        val term = q.poll()
+        termWeights(size) = term._1
+        terms(size) = term._2
+      }
+      (terms, termWeights)
     }
   }
 
