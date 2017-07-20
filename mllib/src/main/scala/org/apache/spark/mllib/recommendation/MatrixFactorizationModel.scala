@@ -307,19 +307,18 @@ object MatrixFactorizationModel extends Loader[MatrixFactorizationModel] {
             pq += dstIds(k) -> ratings(i, k)
             k += 1
           }
-          var size = pq.size
-          while (size > 0) {
-            size -= 1
-            val factor = pq.poll()
-            dstIdMatrix(j + size) = factor._1
-            scoreMatrix(j + size) = factor._2
+          k = 0
+          pq.toArray.sortBy(-_._2).foreach { case (id, score) =>
+            dstIdMatrix(j + k) = id
+            scoreMatrix(j + k) = score
+            k += 1
           }
-          i += 1
           // pq.size maybe less than num, corner case
           j += num
+          i += 1
           pq.clear()
         }
-        (index, (srcIds, dstIdMatrix, new DenseMatrix(m, num, scoreMatrix)))
+        (index, (srcIds, dstIdMatrix, new DenseMatrix(m, num, scoreMatrix, true)))
     }
     ratings.aggregateByKey(null: Array[Int], null: Array[Int], null: DenseMatrix)(
       (rateSum, rate) => mergeFunc(rateSum, rate, num),
@@ -366,7 +365,7 @@ object MatrixFactorizationModel extends Loader[MatrixFactorizationModel] {
             tempIdMatrix(matrixIndex + j) = rate._2(matrixIndex + rate_index)
             tempScoreMatrix(matrixIndex + j) = rate._3(i, rate_index)
             rate_index += 1
-          } else if (rate._3(i, rate_index) < rateSum._3(i, sum_index)) {
+          } else {
             tempIdMatrix(matrixIndex + j) = rateSum._2(matrixIndex + sum_index)
             tempScoreMatrix(matrixIndex + j) = rateSum._3(i, sum_index)
             sum_index += 1
@@ -375,7 +374,7 @@ object MatrixFactorizationModel extends Loader[MatrixFactorizationModel] {
         }
         i += 1
       }
-      (rateSum._1, tempIdMatrix, new DenseMatrix(row, num, tempScoreMatrix))
+      (rateSum._1, tempIdMatrix, new DenseMatrix(row, num, tempScoreMatrix, true))
     }
   }
 
