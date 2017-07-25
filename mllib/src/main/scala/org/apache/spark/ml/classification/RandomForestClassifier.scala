@@ -204,12 +204,62 @@ class RandomForestClassificationModel private[ml] (
   @Since("1.4.0")
   override def treeWeights: Array[Double] = _treeWeights
 
+  override def transform(dataset: Dataset[_]): DataFrame = {
+    transformSchema(dataset.schema, logging = true)
+    transformImpl(dataset)
+  }
+
   override protected def transformImpl(dataset: Dataset[_]): DataFrame = {
     val bcastModel = dataset.sparkSession.sparkContext.broadcast(this)
-    val predictUDF = udf { (features: Any) =>
-      bcastModel.value.predict(features.asInstanceOf[Vector])
+    if (isDefined(thresholds)) {
+      require($(thresholds).length == numClasses, this.getClass.getSimpleName +
+        ".transform() called with non-matching numClasses and thresholds.length." +
+        s" numClasses=$numClasses, but thresholds has length ${$(thresholds).length}")
     }
-    dataset.withColumn($(predictionCol), predictUDF(col($(featuresCol))))
+
+    // Output selected columns only.
+    // This is a bit complicated since it tries to avoid repeated computation.
+    var outputData = dataset
+    var numColsOutput = 0
+    if ($(rawPredictionCol).nonEmpty) {
+      val predictRawUDF = udf { (features: Any) =>
+        bcastModel.value.predictRaw(features.asInstanceOf[Vector])
+      }
+      outputData = outputData.withColumn(getRawPredictionCol, predictRawUDF(col(getFeaturesCol)))
+      numColsOutput += 1
+    }
+    if ($(probabilityCol).nonEmpty) {
+      val probUDF = if ($(rawPredictionCol).nonEmpty) {
+        udf(raw2probability _).apply(col($(rawPredictionCol)))
+      } else {
+        val probabilityUDF = udf { (features: Any) =>
+          bcastModel.value.predictProbability(features.asInstanceOf[Vector])
+        }
+        probabilityUDF(col($(featuresCol)))
+      }
+      outputData = outputData.withColumn($(probabilityCol), probUDF)
+      numColsOutput += 1
+    }
+    if ($(predictionCol).nonEmpty) {
+      val predUDF = if ($(rawPredictionCol).nonEmpty) {
+        udf(raw2prediction _).apply(col($(rawPredictionCol)))
+      } else if ($(probabilityCol).nonEmpty) {
+        udf(probability2prediction _).apply(col($(probabilityCol)))
+      } else {
+        val predictUDF = udf { (features: Any) =>
+          bcastModel.value.predict(features.asInstanceOf[Vector])
+        }
+        predictUDF(col($(featuresCol)))
+      }
+      outputData = outputData.withColumn($(predictionCol), predUDF)
+      numColsOutput += 1
+    }
+
+    if (numColsOutput == 0) {
+      this.logWarning(s"$uid: ProbabilisticClassificationModel.transform() was called as NOOP" +
+        " since no output columns were set.")
+    }
+    outputData.toDF
   }
 
   override protected def predictRaw(features: Vector): Vector = {
